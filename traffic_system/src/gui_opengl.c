@@ -349,35 +349,45 @@ static void draw_vehicles_queue(direction_t d, int count)
         {0.85f, 0.6f, 0.15f}, {0.6f, 0.2f, 0.7f},  {0.3f, 0.3f, 0.35f}
     };
 
-    /* Move cars forward during their green phase */
     int moving = 0;
-    float anim_offset = 0.0f;
     if (d == DIR_NORTH || d == DIR_SOUTH) {
-        if (snap.current_phase == PHASE_NS_GREEN)   moving = 1;
+        if (snap.current_phase == PHASE_NS_GREEN) moving = 1;
     } else {
-        if (snap.current_phase == PHASE_EW_GREEN)   moving = 1;
+        if (snap.current_phase == PHASE_EW_GREEN) moving = 1;
     }
-    if (moving) anim_offset = fmodf(t_animation * 3.0f, 2.0f);
+
+    float cycle      = 10.0f;
+    float t_in_cycle = fmodf(t_animation, cycle);
+    float progress   = moving ? (t_in_cycle / cycle) : 0.0f;
 
     for (int i = 0; i < shown; ++i) {
         float spacing = 2.2f;
-        float dist    = INTER_HALF + 1.5f + i * spacing - anim_offset;
-        if (dist < INTER_HALF + 0.3f) dist = INTER_HALF + 0.3f;
+
+        /* stagger each car's entry: car i only appears after i * 1.5s into the cycle */
+        float entry_delay = i * 1.5f;
+        float effective_progress = progress - (entry_delay / cycle);
+        if (effective_progress < 0.0f) continue;   /* not appeared yet */
+
+        float dist = INTER_HALF + 1.5f + i * spacing
+                     - effective_progress * (ROAD_LENGTH * 2.0f + INTER_HALF);
+
+        /* skip cars that have exited off screen */
+        if (dist < -ROAD_LENGTH) continue;
 
         glPushMatrix();
         switch (d) {
-        case DIR_NORTH:   /* cars on south side waiting, facing north (-z) */
+        case DIR_NORTH:
             glTranslatef(1.3f, 0, dist);
             glRotatef(90, 0, 1, 0);
             break;
-        case DIR_SOUTH:   /* cars on north side, facing south (+z) */
+        case DIR_SOUTH:
             glTranslatef(-1.3f, 0, -dist);
             glRotatef(-90, 0, 1, 0);
             break;
-        case DIR_EAST:    /* cars on west side, facing east (+x) */
+        case DIR_EAST:
             glTranslatef(-dist, 0, 1.3f);
             break;
-        case DIR_WEST:    /* cars on east side, facing west (-x) */
+        case DIR_WEST:
             glTranslatef(dist, 0, -1.3f);
             glRotatef(180, 0, 1, 0);
             break;
@@ -387,27 +397,63 @@ static void draw_vehicles_queue(direction_t d, int count)
         glPopMatrix();
     }
 }
-
 static void draw_emergency_vehicle(void)
 {
     if (!snap.emergency_active) return;
     direction_t d = snap.emergency_direction;
-    /* approaches from far away and goes through the intersection */
-    float t = fmodf(t_animation * 2.0f, 20.0f);
-    float dist = 14.0f - t;
+
+    /* travel time: 12 seconds to cross full road length */
+    float total_travel = 12.0f;
+    float t     = fmodf(t_animation, total_travel);
+    float speed = (ROAD_LENGTH * 2.0f + INTER_HALF * 2.0f) / total_travel;
+    float pos   = t * speed;   /* 0 = far entry, increases toward exit */
+
+    /* pos relative to intersection centre:
+     * starts at +ROAD_LENGTH (far side), passes through 0 (centre),
+     * exits at -ROAD_LENGTH (near side) */
+    float dist = ROAD_LENGTH - pos;
+
+    /* before intersection (dist > 0): left lane
+     * after intersection (dist < 0):  right lane */
     int t_ms = (int)(t_animation * 1000);
 
     glPushMatrix();
     switch (d) {
-    case DIR_NORTH: glTranslatef( 1.3f, 0,  dist); glRotatef( 90, 0,1,0); break;
-    case DIR_SOUTH: glTranslatef(-1.3f, 0, -dist); glRotatef(-90, 0,1,0); break;
-    case DIR_EAST:  glTranslatef(-dist, 0,  1.3f);                       break;
-    case DIR_WEST:  glTranslatef( dist, 0, -1.3f); glRotatef(180,0,1,0); break;
+    case DIR_NORTH:
+        /* left lane = x=-1.3 approaching, x=+1.3 after intersection */
+        if (dist > 0)
+            glTranslatef(-1.3f, 0, dist);
+        else
+            glTranslatef(1.3f, 0, dist);
+        glRotatef(90, 0, 1, 0);
+        break;
+    case DIR_SOUTH:
+        /* left lane = x=+1.3 approaching, x=-1.3 after intersection */
+        if (dist > 0)
+            glTranslatef(1.3f, 0, -dist);
+        else
+            glTranslatef(-1.3f, 0, -dist);
+        glRotatef(-90, 0, 1, 0);
+        break;
+    case DIR_EAST:
+        /* left lane = z=-1.3 approaching, z=+1.3 after intersection */
+        if (dist > 0)
+            glTranslatef(-dist, 0, -1.3f);
+        else
+            glTranslatef(-dist, 0, 1.3f);
+        break;
+    case DIR_WEST:
+        /* left lane = z=+1.3 approaching, z=-1.3 after intersection */
+        if (dist > 0)
+            glTranslatef(dist, 0, 1.3f);
+        else
+            glTranslatef(dist, 0, -1.3f);
+        glRotatef(180, 0, 1, 0);
+        break;
     }
     draw_emergency_car(t_ms);
     glPopMatrix();
 }
-
 /* ---------- pedestrians --------------------------------------------- */
 static void draw_pedestrian(float x, float z, float r, float g, float b)
 {
@@ -455,18 +501,28 @@ static void draw_pedestrians(void)
     }
 
     /* active pedestrians walking across (during pedestrian phase) */
+    /* active pedestrians walking across (during pedestrian phase) */
     if (snap.pedestrian_active) {
-        float walk = fmodf(t_animation * 1.5f, 1.0f);
+        /* clamp walk to 0..1 so pedestrians walk once and stop */
+        float total = (float)snap.pedestrian_remaining;
+        float elapsed = (float)(snap.t_pedestrian - snap.pedestrian_remaining);
+        float walk = (snap.t_pedestrian > 0)
+                     ? (elapsed / ((float)snap.t_pedestrian * 0.6f))
+                     : 0.0f;
+        if (walk > 1.0f) walk = 1.0f;
+
         /* north-south crossings */
-        draw_pedestrian(-1.5f + walk * 3.0f, -INTER_HALF - 0.45f,
-                        0.2f, 0.5f, 0.9f);
-        draw_pedestrian( 1.5f - walk * 3.0f,  INTER_HALF + 0.45f,
-                        0.9f, 0.3f, 0.3f);
-        /* east-west crossings */
-        draw_pedestrian(-INTER_HALF - 0.45f, -1.5f + walk * 3.0f,
+        draw_pedestrian(-ROAD_HALF_WIDTH + walk * (ROAD_HALF_WIDTH * 2.0f),
+                        -INTER_HALF - 0.45f, 0.2f, 0.5f, 0.9f);
+        draw_pedestrian( ROAD_HALF_WIDTH - walk * (ROAD_HALF_WIDTH * 2.0f),
+                         INTER_HALF + 0.45f, 0.9f, 0.3f, 0.3f);
+        draw_pedestrian(-INTER_HALF - 0.45f,
+                        -ROAD_HALF_WIDTH + walk * (ROAD_HALF_WIDTH * 2.0f),
                         0.3f, 0.7f, 0.3f);
-        draw_pedestrian( INTER_HALF + 0.45f,  1.5f - walk * 3.0f,
+        draw_pedestrian( INTER_HALF + 0.45f,
+                         ROAD_HALF_WIDTH - walk * (ROAD_HALF_WIDTH * 2.0f),
                         0.9f, 0.6f, 0.2f);
+        (void)total;
     }
 }
 
