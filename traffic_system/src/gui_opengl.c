@@ -43,6 +43,12 @@ static float cam_rotate  = 0.0f;       /* rotate around y    */
 static float cam_dist    = 28.0f;
 static int   show_help   = 1;
 
+/* recent events ring buffer for HUD display */
+#define MAX_RECENT_EVENTS 5
+static char recent_events[MAX_RECENT_EVENTS][128];
+static int  recent_count = 0;
+static int  recent_head  = 0;
+
 /* animation */
 static float t_animation = 0.0f;       /* global anim time   */
 
@@ -526,6 +532,46 @@ static void draw_pedestrians(void)
     }
 }
 
+static void add_recent_event(const char *msg)
+{
+    strncpy(recent_events[recent_head], msg, 127);
+    recent_events[recent_head][127] = '\0';
+    recent_head = (recent_head + 1) % MAX_RECENT_EVENTS;
+    if (recent_count < MAX_RECENT_EVENTS) recent_count++;
+}
+
+static void poll_recent_events(void)
+{
+    if (!snap.emergency_active && snap.current_phase != snap.current_phase) return;
+
+    /* detect phase changes */
+    static phase_t last_phase = PHASE_STARTUP;
+    if (snap.current_phase != last_phase) {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "Phase: %s", PHASE_NAMES[snap.current_phase]);
+        add_recent_event(buf);
+        last_phase = snap.current_phase;
+    }
+
+    /* detect emergency */
+    static int last_emerg = 0;
+    if (snap.emergency_active && !last_emerg) {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "EMERGENCY from %s",
+                 DIR_NAMES[snap.emergency_direction]);
+        add_recent_event(buf);
+    }
+    last_emerg = snap.emergency_active;
+
+    /* detect pedestrian phase */
+    static int last_ped = 0;
+    if (snap.pedestrian_active && !last_ped)
+        add_recent_event("Pedestrian crossing OPEN");
+    if (!snap.pedestrian_active && last_ped)
+        add_recent_event("Pedestrian crossing CLOSED");
+    last_ped = snap.pedestrian_active;
+}
+
 /* ---------- HUD ------------------------------------------------------ */
 static void draw_hud(void)
 {
@@ -606,6 +652,26 @@ static void draw_hud(void)
         draw_text(WIN_W - 310,  50, "  +  /  - : zoom");
         draw_text(WIN_W - 310,  30, "  h : toggle help     q : quit");
     }
+    /* recent events panel — bottom left */
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glColor4f(0, 0, 0, 0.50f);
+    glBegin(GL_QUADS);
+        glVertex2f(10,   10);
+        glVertex2f(360,  10);
+        glVertex2f(360,  10 + MAX_RECENT_EVENTS * 18 + 10);
+        glVertex2f(10,   10 + MAX_RECENT_EVENTS * 18 + 10);
+    glEnd();
+    glDisable(GL_BLEND);
+
+    glColor3f(0.75f, 0.85f, 1.0f);
+    draw_text(20, 10 + MAX_RECENT_EVENTS * 18, "Recent events:");
+    for (int i = 0; i < recent_count; i++) {
+        int idx = (recent_head - recent_count + i + MAX_RECENT_EVENTS)
+                  % MAX_RECENT_EVENTS;
+        glColor3f(0.90f, 0.90f, 0.90f);
+        draw_text(20, 10 + (MAX_RECENT_EVENTS - 1 - i) * 18, recent_events[idx]);
+    } 
 
     glMatrixMode(GL_PROJECTION); glPopMatrix();
     glMatrixMode(GL_MODELVIEW);  glPopMatrix();
@@ -627,6 +693,7 @@ static void take_snapshot(void)
 static void on_display(void)
 {
     take_snapshot();
+    poll_recent_events();
     t_animation += 0.05f;
 
     glClearColor(0.55f, 0.75f, 0.9f, 1.0f);
