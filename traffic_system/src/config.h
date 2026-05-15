@@ -21,6 +21,7 @@ static int apply_kv(shared_state_t *s, const char *key, const char *val)
     else if (!strcmp(key, "T_PEDESTRIAN_MAX_WAIT")) s->t_pedestrian_max_wait = v;
     else if (!strcmp(key, "T_VEHICLE_MAX_WAIT"))    s->t_vehicle_max_wait = v;
     else if (!strcmp(key, "T_EMERGENCY_RESPONSE"))  s->t_emergency_response = v;
+    else if (!strcmp(key, "T_EMERGENCY_MAX_HOLD"))  s->t_emergency_max_hold = v;
     else if (!strcmp(key, "VEHICLE_SPAWN_RATE"))    s->vehicle_spawn_rate = v;
     else if (!strcmp(key, "PEDESTRIAN_SPAWN_RATE")) s->pedestrian_spawn_rate = v;
     else if (!strcmp(key, "EMERGENCY_SPAWN_RATE"))  s->emergency_spawn_rate = v;
@@ -39,6 +40,7 @@ static void load_defaults(shared_state_t *s)
     s->t_pedestrian_max_wait  = 45;
     s->t_vehicle_max_wait     = 60;
     s->t_emergency_response   = 5;
+    s->t_emergency_max_hold   = 15;
     s->vehicle_spawn_rate     = 25;   /* 25% chance/sec/direction */
     s->pedestrian_spawn_rate  = 10;
     s->emergency_spawn_rate   = 5;    /* 5 in 1000 / s */

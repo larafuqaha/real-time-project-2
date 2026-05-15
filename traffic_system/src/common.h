@@ -157,6 +157,7 @@ typedef struct {
     int            t_pedestrian_max_wait;
     int            t_vehicle_max_wait;
     int            t_emergency_response;
+    int t_emergency_max_hold;   /* max seconds to hold emergency green */
     int            vehicle_spawn_rate;          /* % per second/dir  */
     int            pedestrian_spawn_rate;
     int            emergency_spawn_rate;        /* per mille / s     */

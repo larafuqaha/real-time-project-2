@@ -358,7 +358,7 @@ static void execute_emergency(void)
         if (!still) break;
 
         /* External "clear" signal: 1.5 * t_emergency_response per cycle  */
-        if (passed > (time_t)(S->t_emergency_response * 3)) {
+        if (passed > (time_t)(S->t_emergency_max_hold)) {
             sem_lock(semid);
             S->emergency_active = 0;
             sem_unlock(semid);
