@@ -184,8 +184,21 @@ static void execute_ns_green(int duration)
         }
         sem_unlock(semid);
 
-        if (emerg)       break;
+        if (emerg) break;
         if (ped_timeout && time(NULL) - start >= S->t_green_min) break;
+
+        /* Starvation: if EW has been waiting too long, cut green short */
+        sem_lock(semid);
+        int ew_waiting = S->waiting_vehicles[DIR_EAST] + S->waiting_vehicles[DIR_WEST];
+        int ew_starved = (ew_waiting > 0 &&
+                         time(NULL) - start >= S->t_vehicle_max_wait);
+        sem_unlock(semid);
+        if (ew_starved && time(NULL) - start >= S->t_green_min) {
+            send_log(qlog, "CTRL", 1,
+                     "STARVATION: EW waiting > %ds — cutting NS-GREEN short",
+                     S->t_vehicle_max_wait);
+            break;
+        }
 
         sleep(1);
     }
@@ -221,8 +234,22 @@ static void execute_ew_green(int duration)
         }
         sem_unlock(semid);
 
-        if (emerg)       break;
+        if (emerg) break;
         if (ped_timeout && time(NULL) - start >= S->t_green_min) break;
+
+        /* Starvation: if NS has been waiting too long, cut green short */
+        sem_lock(semid);
+        int ns_waiting = S->waiting_vehicles[DIR_NORTH] + S->waiting_vehicles[DIR_SOUTH];
+        int ns_starved = (ns_waiting > 0 &&
+                         time(NULL) - start >= S->t_vehicle_max_wait);
+        sem_unlock(semid);
+        if (ns_starved && time(NULL) - start >= S->t_green_min) {
+            send_log(qlog, "CTRL", 1,
+                     "STARVATION: NS waiting > %ds — cutting EW-GREEN short",
+                     S->t_vehicle_max_wait);
+            break;
+        }
+
         sleep(1);
     }
 }
