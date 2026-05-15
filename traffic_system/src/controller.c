@@ -298,6 +298,7 @@ static void execute_pedestrian(void)
     sem_unlock(semid);
     set_phase(PHASE_PEDESTRIAN, S->t_pedestrian);
     send_log(qlog, "CTRL", 0, "Pedestrian crossing OPEN");
+    send_log(qlog, "CTRL", 0, "Pedestrian request ACCEPTED for all pending directions");
 
     for (int i = 0; i < S->t_pedestrian; ++i) {
         drain_events();
@@ -313,8 +314,10 @@ static void execute_pedestrian(void)
     sem_lock(semid);
     S->pedestrian_active    = 0;
     S->pedestrian_remaining = 0;
+    int served = S->total_pedestrians_served;
     sem_unlock(semid);
     send_log(qlog, "CTRL", 0, "Pedestrian crossing CLOSED");
+    send_log(qlog, "CTRL", 0, "Pedestrian request COMPLETED — total served so far: %d", served);
 }
 
 static void execute_emergency(void)
