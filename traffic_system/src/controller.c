@@ -163,7 +163,6 @@ static void execute_ns_green(int duration)
     while (time(NULL) - start < duration) {
         drain_events();
 
-        /* Service vehicle counters: when N/S have green, they "leave" */
         sem_lock(semid);
         if (S->waiting_vehicles[DIR_NORTH] > 0) S->waiting_vehicles[DIR_NORTH]--;
         if (S->waiting_vehicles[DIR_SOUTH] > 0) S->waiting_vehicles[DIR_SOUTH]--;
@@ -172,7 +171,6 @@ static void execute_ns_green(int duration)
             (S->waiting_vehicles[DIR_SOUTH] > 0 ? 1 : 0);
         S->phase_remaining = duration - (int)(time(NULL) - start);
 
-        /* Early-termination conditions: emergency or pedestrian timeout */
         int emerg = S->emergency_active;
         int now = time(NULL);
         int ped_timeout = 0;
@@ -185,17 +183,23 @@ static void execute_ns_green(int duration)
         sem_unlock(semid);
 
         if (emerg) break;
-        if (ped_timeout && time(NULL) - start >= S->t_green_min) break;
 
-        /* Starvation: if EW has been waiting too long, cut green short */
+        if (ped_timeout && time(NULL) - start >= S->t_green_min) {
+            send_log(qlog, "CTRL", 1,
+                     "TIMING VIOLATION: pedestrian waited > %ds — cutting NS-GREEN short",
+                     S->t_pedestrian_max_wait);
+            break;
+        }
+
         sem_lock(semid);
         int ew_waiting = S->waiting_vehicles[DIR_EAST] + S->waiting_vehicles[DIR_WEST];
         int ew_starved = (ew_waiting > 0 &&
                          time(NULL) - start >= S->t_vehicle_max_wait);
         sem_unlock(semid);
+
         if (ew_starved && time(NULL) - start >= S->t_green_min) {
             send_log(qlog, "CTRL", 1,
-                     "STARVATION: EW waiting > %ds — cutting NS-GREEN short",
+                     "TIMING VIOLATION: EW starved > %ds — cutting NS-GREEN short",
                      S->t_vehicle_max_wait);
             break;
         }
@@ -215,6 +219,7 @@ static void execute_ew_green(int duration)
     time_t start = time(NULL);
     while (time(NULL) - start < duration) {
         drain_events();
+
         sem_lock(semid);
         if (S->waiting_vehicles[DIR_EAST] > 0) S->waiting_vehicles[DIR_EAST]--;
         if (S->waiting_vehicles[DIR_WEST] > 0) S->waiting_vehicles[DIR_WEST]--;
@@ -235,17 +240,23 @@ static void execute_ew_green(int duration)
         sem_unlock(semid);
 
         if (emerg) break;
-        if (ped_timeout && time(NULL) - start >= S->t_green_min) break;
 
-        /* Starvation: if NS has been waiting too long, cut green short */
+        if (ped_timeout && time(NULL) - start >= S->t_green_min) {
+            send_log(qlog, "CTRL", 1,
+                     "TIMING VIOLATION: pedestrian waited > %ds — cutting EW-GREEN short",
+                     S->t_pedestrian_max_wait);
+            break;
+        }
+
         sem_lock(semid);
         int ns_waiting = S->waiting_vehicles[DIR_NORTH] + S->waiting_vehicles[DIR_SOUTH];
         int ns_starved = (ns_waiting > 0 &&
                          time(NULL) - start >= S->t_vehicle_max_wait);
         sem_unlock(semid);
+
         if (ns_starved && time(NULL) - start >= S->t_green_min) {
             send_log(qlog, "CTRL", 1,
-                     "STARVATION: NS waiting > %ds — cutting EW-GREEN short",
+                     "TIMING VIOLATION: NS starved > %ds — cutting EW-GREEN short",
                      S->t_vehicle_max_wait);
             break;
         }
@@ -253,12 +264,13 @@ static void execute_ew_green(int duration)
         sleep(1);
     }
 }
-
 static void execute_yellow(direction_t a, direction_t b, phase_t p)
 {
     send_command(a, LIGHT_YELLOW);
     send_command(b, LIGHT_YELLOW);
     set_phase(p, S->t_yellow);
+    send_log(qlog, "CTRL", 0,
+             "TIMING: yellow phase started — must last exactly %ds", S->t_yellow);
     for (int i = 0; i < S->t_yellow; ++i) {
         drain_events();
         sem_lock(semid);
@@ -267,7 +279,6 @@ static void execute_yellow(direction_t a, direction_t b, phase_t p)
         sleep(1);
     }
 }
-
 static void execute_all_red(phase_t p)
 {
     for (int i = 0; i < NUM_DIRECTIONS; ++i)
