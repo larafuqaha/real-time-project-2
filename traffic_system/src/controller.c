@@ -334,7 +334,20 @@ static void execute_pedestrian(void)
 static void execute_emergency(void)
 {
     direction_t ed;
-    sem_lock(semid); ed = S->emergency_direction; sem_unlock(semid);
+    sem_lock(semid); 
+    ed = S->emergency_direction; 
+    sem_unlock(semid);
+
+    /* Ambulance coming FROM ed travels TOWARD the opposite side.
+       Give green to the light FACING the ambulance.                  */
+    direction_t green_dir;
+    switch (ed) {
+        case DIR_NORTH: green_dir = DIR_SOUTH; break;
+        case DIR_SOUTH: green_dir = DIR_NORTH; break;
+        case DIR_EAST:  green_dir = DIR_EAST;  break;  /* no flip for E/W */
+        case DIR_WEST:  green_dir = DIR_WEST;  break;  /* no flip for E/W */
+        default:        green_dir = ed;        break;
+    }
 
     send_log(qlog, "CTRL", 1, "EMERGENCY priority for %s — clearing intersection",
              DIR_NAMES[ed]);
@@ -351,8 +364,8 @@ static void execute_emergency(void)
         send_command((direction_t)i, LIGHT_RED);
     sleep(S->t_all_red);
 
-    /* Emergency direction green                                          */
-    send_command(ed, LIGHT_GREEN);
+    /* Give green to the light FACING the ambulance                       */
+    send_command(green_dir, LIGHT_GREEN);
     set_phase(PHASE_EMERGENCY, S->t_green_min);
 
     /* Hold until emergency cleared OR min green satisfied                */
@@ -362,13 +375,12 @@ static void execute_emergency(void)
         sem_lock(semid);
         int still = S->emergency_active;
         time_t passed = time(NULL) - start;
-        if (passed < S->t_green_min) still = 1;       /* enforce min green */
+        if (passed < S->t_green_min) still = 1;
         S->phase_remaining = (S->t_green_min - passed > 0) ?
                              (int)(S->t_green_min - passed) : 0;
         sem_unlock(semid);
         if (!still) break;
 
-        /* External "clear" signal: 1.5 * t_emergency_response per cycle  */
         if (passed > (time_t)(S->t_emergency_max_hold)) {
             sem_lock(semid);
             S->emergency_active = 0;
@@ -379,9 +391,9 @@ static void execute_emergency(void)
     }
 
     /* Safe exit: yellow then red                                         */
-    send_command(ed, LIGHT_YELLOW);
+    send_command(green_dir, LIGHT_YELLOW);
     sleep(S->t_yellow);
-    send_command(ed, LIGHT_RED);
+    send_command(green_dir, LIGHT_RED);
     sleep(S->t_all_red);
 
     send_log(qlog, "CTRL", 1, "EMERGENCY cleared");

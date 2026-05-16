@@ -365,32 +365,31 @@ static void draw_vehicles_queue(direction_t d, int count)
     for (int i = 0; i < shown; ++i) {
         float spacing = 2.2f;
 
-        float entry_delay = i * 1.5f;
-        float effective_progress = progress - (entry_delay / cycle);
-        if (effective_progress < 0.0f) continue;
-
-        float dist = INTER_HALF + 1.5f + i * spacing
-                     - effective_progress * (ROAD_LENGTH * 2.0f + INTER_HALF);
-
-        if (dist < -ROAD_LENGTH) continue;
-
         glPushMatrix();
-        switch (d) {
-        case DIR_NORTH:
-            glTranslatef(1.3f, 0, dist);
-            glRotatef(90, 0, 1, 0);
-            break;
-        case DIR_SOUTH:
-            glTranslatef(-1.3f, 0, -dist);
-            glRotatef(-90, 0, 1, 0);
-            break;
-        case DIR_EAST:
-            glTranslatef(-dist, 0, 1.3f);
-            break;
-        case DIR_WEST:
-            glTranslatef(dist, 0, -1.3f);
-            glRotatef(180, 0, 1, 0);
-            break;
+        if (!moving) {
+            /* Stack cars behind stop line when red */
+            float queue_dist = INTER_HALF + 1.5f + i * spacing;
+            switch (d) {
+            case DIR_NORTH: glTranslatef( 1.3f, 0,  queue_dist); glRotatef( 90, 0,1,0); break;
+            case DIR_SOUTH: glTranslatef(-1.3f, 0, -queue_dist); glRotatef(-90, 0,1,0); break;
+            case DIR_EAST:  glTranslatef(-queue_dist, 0,  1.3f);                         break;
+            case DIR_WEST:  glTranslatef( queue_dist, 0, -1.3f); glRotatef(180, 0,1,0); break;
+            }
+        } else {
+            float entry_delay = i * 1.5f;
+            float effective_progress = progress - (entry_delay / cycle);
+            if (effective_progress < 0.0f) { glPopMatrix(); continue; }
+
+            float dist = INTER_HALF + 1.5f + i * spacing
+                        - effective_progress * (ROAD_LENGTH * 2.0f + INTER_HALF);
+            if (dist < -ROAD_LENGTH) { glPopMatrix(); continue; }
+
+            switch (d) {
+            case DIR_NORTH: glTranslatef( 1.3f, 0,  dist); glRotatef( 90, 0,1,0); break;
+            case DIR_SOUTH: glTranslatef(-1.3f, 0, -dist); glRotatef(-90, 0,1,0); break;
+            case DIR_EAST:  glTranslatef(-dist,  0,  1.3f);                        break;
+            case DIR_WEST:  glTranslatef( dist,  0, -1.3f); glRotatef(180, 0,1,0); break;
+            }
         }
         float *c = palette[i % 6];
         draw_car(c[0], c[1], c[2]);
@@ -403,8 +402,24 @@ static void draw_emergency_vehicle(void)
     if (!snap.emergency_active) return;
     direction_t d = snap.emergency_direction;
 
-    float total_travel = 12.0f;
-    float t     = fmodf(t_animation, total_travel);
+    static float emerg_start_t = -1.0f;
+    static int   last_emerg    = 0;
+    static direction_t last_dir = DIR_NORTH;
+
+    /* Reset animation when a NEW emergency starts */
+    if (!last_emerg && snap.emergency_active) {
+        emerg_start_t = t_animation;
+        last_dir = d;
+    }
+    /* Also reset if direction changed (new emergency after old one) */
+    if (snap.emergency_active && d != last_dir) {
+        emerg_start_t = t_animation;
+        last_dir = d;
+    }
+    last_emerg = snap.emergency_active;
+
+    float total_travel = 14.0f;
+    float t     = fmodf(t_animation - emerg_start_t, total_travel);
     float speed = (ROAD_LENGTH * 2.0f + INTER_HALF * 2.0f) / total_travel;
     float pos   = t * speed;
     float dist  = ROAD_LENGTH - pos;
@@ -414,8 +429,8 @@ static void draw_emergency_vehicle(void)
     glPushMatrix();
     switch (d) {
     case DIR_NORTH:
-        if (dist > 0) glTranslatef(-1.3f, 0, dist);
-        else          glTranslatef( 1.3f, 0, dist);
+        if (dist > 0) glTranslatef(-1.3f, 0,  dist);
+        else          glTranslatef( 1.3f, 0,  dist);
         glRotatef(90, 0, 1, 0);
         break;
     case DIR_SOUTH:

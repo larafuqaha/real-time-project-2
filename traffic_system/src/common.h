@@ -168,6 +168,7 @@ typedef struct {
     int            total_emergencies;
     int            safety_violations;
     int            running;                     /* shutdown flag     */
+
 } shared_state_t;
 
 /* ------------------------------------------------------------------ */
