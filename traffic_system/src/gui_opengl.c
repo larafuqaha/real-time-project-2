@@ -179,7 +179,7 @@ static void draw_roads(void)
 
     /* stop lines (white) at each entry */
     set_color(0.92f, 0.92f, 0.92f);
-    /* North-bound stop (cars coming from south, stop on the south side of intersection) */
+    /* North-bound stop */
     glBegin(GL_QUADS); glNormal3f(0,1,0);
     glVertex3f( 0.1f, 0.05f, INTER_HALF + 0.2f);
     glVertex3f( ROAD_HALF_WIDTH, 0.05f, INTER_HALF + 0.2f);
@@ -210,7 +210,7 @@ static void draw_roads(void)
 
     /* zebra crossings (white stripes) at each side */
     set_color(0.92f, 0.92f, 0.92f);
-    /* North crossing (top side, on x axis) */
+    /* North crossing */
     for (float x = -ROAD_HALF_WIDTH + 0.3f; x < ROAD_HALF_WIDTH; x += 0.7f) {
         glBegin(GL_QUADS); glNormal3f(0,1,0);
         glVertex3f(x,        0.06f, -INTER_HALF - 0.8f);
@@ -248,11 +248,7 @@ static void draw_roads(void)
     }
 }
 
-/* Draw a single traffic-light pole with three lamps.
- *  light_color = color currently shown
- *  pos_x, pos_z = base on ground
- *  yaw = rotation so the lamp head faces the lane
- */
+/* Draw a single traffic-light pole with three lamps. */
 static void draw_traffic_light(float px, float pz, float yaw,
                                light_color_t color)
 {
@@ -267,7 +263,7 @@ static void draw_traffic_light(float px, float pz, float yaw,
         draw_box(0.18f, 3.2f, 0.18f);
     glPopMatrix();
 
-    /* Housing (a small black box) */
+    /* Housing */
     set_color(0.10f, 0.10f, 0.10f);
     glPushMatrix();
         glTranslatef(0, 3.6f, 0.35f);
@@ -369,15 +365,13 @@ static void draw_vehicles_queue(direction_t d, int count)
     for (int i = 0; i < shown; ++i) {
         float spacing = 2.2f;
 
-        /* stagger each car's entry: car i only appears after i * 1.5s into the cycle */
         float entry_delay = i * 1.5f;
         float effective_progress = progress - (entry_delay / cycle);
-        if (effective_progress < 0.0f) continue;   /* not appeared yet */
+        if (effective_progress < 0.0f) continue;
 
         float dist = INTER_HALF + 1.5f + i * spacing
                      - effective_progress * (ROAD_LENGTH * 2.0f + INTER_HALF);
 
-        /* skip cars that have exited off screen */
         if (dist < -ROAD_LENGTH) continue;
 
         glPushMatrix();
@@ -403,63 +397,46 @@ static void draw_vehicles_queue(direction_t d, int count)
         glPopMatrix();
     }
 }
+
 static void draw_emergency_vehicle(void)
 {
     if (!snap.emergency_active) return;
     direction_t d = snap.emergency_direction;
 
-    /* travel time: 12 seconds to cross full road length */
     float total_travel = 12.0f;
     float t     = fmodf(t_animation, total_travel);
     float speed = (ROAD_LENGTH * 2.0f + INTER_HALF * 2.0f) / total_travel;
-    float pos   = t * speed;   /* 0 = far entry, increases toward exit */
+    float pos   = t * speed;
+    float dist  = ROAD_LENGTH - pos;
 
-    /* pos relative to intersection centre:
-     * starts at +ROAD_LENGTH (far side), passes through 0 (centre),
-     * exits at -ROAD_LENGTH (near side) */
-    float dist = ROAD_LENGTH - pos;
-
-    /* before intersection (dist > 0): left lane
-     * after intersection (dist < 0):  right lane */
     int t_ms = (int)(t_animation * 1000);
 
     glPushMatrix();
     switch (d) {
     case DIR_NORTH:
-        /* left lane = x=-1.3 approaching, x=+1.3 after intersection */
-        if (dist > 0)
-            glTranslatef(-1.3f, 0, dist);
-        else
-            glTranslatef(1.3f, 0, dist);
+        if (dist > 0) glTranslatef(-1.3f, 0, dist);
+        else          glTranslatef( 1.3f, 0, dist);
         glRotatef(90, 0, 1, 0);
         break;
     case DIR_SOUTH:
-        /* left lane = x=+1.3 approaching, x=-1.3 after intersection */
-        if (dist > 0)
-            glTranslatef(1.3f, 0, -dist);
-        else
-            glTranslatef(-1.3f, 0, -dist);
+        if (dist > 0) glTranslatef( 1.3f, 0, -dist);
+        else          glTranslatef(-1.3f, 0, -dist);
         glRotatef(-90, 0, 1, 0);
         break;
     case DIR_EAST:
-        /* left lane = z=-1.3 approaching, z=+1.3 after intersection */
-        if (dist > 0)
-            glTranslatef(-dist, 0, -1.3f);
-        else
-            glTranslatef(-dist, 0, 1.3f);
+        if (dist > 0) glTranslatef(-dist, 0, -1.3f);
+        else          glTranslatef(-dist, 0,  1.3f);
         break;
     case DIR_WEST:
-        /* left lane = z=+1.3 approaching, z=-1.3 after intersection */
-        if (dist > 0)
-            glTranslatef(dist, 0, 1.3f);
-        else
-            glTranslatef(dist, 0, -1.3f);
+        if (dist > 0) glTranslatef( dist, 0,  1.3f);
+        else          glTranslatef( dist, 0, -1.3f);
         glRotatef(180, 0, 1, 0);
         break;
     }
     draw_emergency_car(t_ms);
     glPopMatrix();
 }
+
 /* ---------- pedestrians --------------------------------------------- */
 static void draw_pedestrian(float x, float z, float r, float g, float b)
 {
@@ -487,48 +464,128 @@ static void draw_pedestrian(float x, float z, float r, float g, float b)
     glPopMatrix();
 }
 
+typedef struct {
+    int   walking;          
+    int   frozen_count;     
+    float walk_start_t; 
+    int   last_light; 
+} dir_ped_state_t;
+
+static dir_ped_state_t dps[4];
+static int dps_inited = 0;
+
 static void draw_pedestrians(void)
 {
-    /* waiting pedestrians on the corner sidewalks */
-    for (int i = 0; i < NUM_DIRECTIONS; ++i) {
-        if (!snap.pedestrian_pending[i]) continue;
-        float colors[][3] = {
-            {0.85f, 0.20f, 0.20f}, {0.20f, 0.55f, 0.85f},
-            {0.20f, 0.65f, 0.35f}, {0.85f, 0.45f, 0.20f}
-        };
-        float x = 0, z = 0;
-        switch (i) {
-        case DIR_NORTH: x = ROAD_HALF_WIDTH + 1.3f; z = -INTER_HALF - 0.4f; break;
-        case DIR_SOUTH: x = -ROAD_HALF_WIDTH-1.3f;  z =  INTER_HALF + 0.4f; break;
-        case DIR_EAST:  x = -INTER_HALF - 0.4f;     z = -ROAD_HALF_WIDTH-1.3f; break;
-        case DIR_WEST:  x =  INTER_HALF + 0.4f;     z =  ROAD_HALF_WIDTH + 1.3f; break;
+    float ped_colors[][3] = {
+        {0.85f, 0.20f, 0.20f},
+        {0.20f, 0.55f, 0.85f},
+        {0.20f, 0.65f, 0.35f},
+        {0.85f, 0.45f, 0.20f},
+        {0.75f, 0.20f, 0.75f},
+        {0.95f, 0.85f, 0.20f},
+    };
+    int ncolors = 6;
+
+    float speed    = 2.5f;
+    float gap      = 0.6f;
+    float road_end = ROAD_HALF_WIDTH * 2.0f + ROAD_LENGTH;
+
+    if (!dps_inited) {
+        for (int i = 0; i < 4; ++i) {
+            dps[i].walking      = 0;
+            dps[i].frozen_count = 0;
+            dps[i].walk_start_t = 0.0f;
+            dps[i].last_light   = LIGHT_RED;
         }
-        draw_pedestrian(x, z, colors[i][0], colors[i][1], colors[i][2]);
+        dps_inited = 1;
     }
 
-    /* active pedestrians walking across (during pedestrian phase) */
-    /* active pedestrians walking across (during pedestrian phase) */
-    if (snap.pedestrian_active) {
-        /* clamp walk to 0..1 so pedestrians walk once and stop */
-        float total = (float)snap.pedestrian_remaining;
-        float elapsed = (float)(snap.t_pedestrian - snap.pedestrian_remaining);
-        float walk = (snap.t_pedestrian > 0)
-                     ? (elapsed / ((float)snap.t_pedestrian * 0.6f))
-                     : 0.0f;
-        if (walk > 1.0f) walk = 1.0f;
+    for (int i = 0; i < NUM_DIRECTIONS; ++i) {
+        int cur_light   = snap.light[i];
+        int has_pending = snap.pedestrian_pending[i] > 0;
 
-        /* north-south crossings */
-        draw_pedestrian(-ROAD_HALF_WIDTH + walk * (ROAD_HALF_WIDTH * 2.0f),
-                        -INTER_HALF - 0.45f, 0.2f, 0.5f, 0.9f);
-        draw_pedestrian( ROAD_HALF_WIDTH - walk * (ROAD_HALF_WIDTH * 2.0f),
-                         INTER_HALF + 0.45f, 0.9f, 0.3f, 0.3f);
-        draw_pedestrian(-INTER_HALF - 0.45f,
-                        -ROAD_HALF_WIDTH + walk * (ROAD_HALF_WIDTH * 2.0f),
-                        0.3f, 0.7f, 0.3f);
-        draw_pedestrian( INTER_HALF + 0.45f,
-                         ROAD_HALF_WIDTH - walk * (ROAD_HALF_WIDTH * 2.0f),
-                        0.9f, 0.6f, 0.2f);
-        (void)total;
+       
+        if (cur_light == LIGHT_RED && dps[i].last_light != LIGHT_RED) {
+            if (has_pending) {
+                dps[i].walking      = 1;
+                dps[i].walk_start_t = t_animation;
+                int cnt = snap.pedestrian_pending[i];
+                if (cnt > 8) cnt = 8;
+                dps[i].frozen_count = cnt;
+            }
+        }
+
+        
+        if (cur_light != LIGHT_RED && dps[i].last_light == LIGHT_RED) {
+           
+        }
+
+        dps[i].last_light = cur_light;
+
+       
+        if (dps[i].walking) {
+            float base_pos = (t_animation - dps[i].walk_start_t) * speed;
+            float last_pos = base_pos - (dps[i].frozen_count - 1) * gap;
+            if (last_pos >= road_end) {
+                dps[i].walking = 0;
+                if (cur_light == LIGHT_RED && snap.pedestrian_pending[i] > 0) {
+                    dps[i].walking      = 1;
+                    dps[i].walk_start_t = t_animation;
+                    int cnt = snap.pedestrian_pending[i];
+                    if (cnt > 8) cnt = 8;
+                    dps[i].frozen_count = cnt;
+                }
+            }
+        }
+
+      
+        if (!dps[i].walking && has_pending) {
+            int waiting = snap.pedestrian_pending[i];
+            if (waiting > 8) waiting = 8;
+
+            for (int k = 0; k < waiting; ++k) {
+                float off = (k - (waiting - 1) * 0.5f) * 0.55f;
+                float px, pz;
+                switch (i) {
+                case DIR_NORTH: px =  ROAD_HALF_WIDTH + 1.5f;  pz = -INTER_HALF - 0.6f + off; break;
+                case DIR_SOUTH: px = -ROAD_HALF_WIDTH - 1.5f;  pz =  INTER_HALF + 0.6f + off; break;
+                case DIR_EAST:  px = -INTER_HALF - 0.6f + off; pz = -ROAD_HALF_WIDTH - 1.5f;  break;
+                case DIR_WEST:  px =  INTER_HALF + 0.6f + off; pz =  ROAD_HALF_WIDTH + 1.5f;  break;
+                default:        px = pz = 0; break;
+                }
+                float *c = ped_colors[k % ncolors];
+                draw_pedestrian(px, pz, c[0], c[1], c[2]);
+            }
+        }
+
+    
+        if (dps[i].walking) {
+            float base_pos = (t_animation - dps[i].walk_start_t) * speed;
+            int   n        = dps[i].frozen_count;
+
+            for (int k = 0; k < n; ++k) {
+                float pos = base_pos - k * gap;
+                if (pos <= 0.0f)     continue; 
+                if (pos >= road_end) continue; 
+
+                float *c = ped_colors[k % ncolors];
+
+                switch (i) {
+                case DIR_NORTH:
+                    draw_pedestrian(-ROAD_HALF_WIDTH + pos, -INTER_HALF - 0.45f, c[0], c[1], c[2]);
+                    break;
+                case DIR_SOUTH:
+                    draw_pedestrian( ROAD_HALF_WIDTH - pos,  INTER_HALF + 0.45f, c[0], c[1], c[2]);
+                    break;
+                case DIR_EAST:
+                    draw_pedestrian( INTER_HALF + 0.45f, -ROAD_HALF_WIDTH + pos, c[0], c[1], c[2]);
+                    break;
+                case DIR_WEST:
+                    draw_pedestrian(-INTER_HALF - 0.45f,  ROAD_HALF_WIDTH - pos, c[0], c[1], c[2]);
+                    break;
+                }
+            }
+        }
     }
 }
 
@@ -542,8 +599,6 @@ static void add_recent_event(const char *msg)
 
 static void poll_recent_events(void)
 {
-    if (!snap.emergency_active && snap.current_phase != snap.current_phase) return;
-
     /* detect phase changes */
     static phase_t last_phase = PHASE_STARTUP;
     if (snap.current_phase != last_phase) {
@@ -564,18 +619,17 @@ static void poll_recent_events(void)
     last_emerg = snap.emergency_active;
 
     /* detect pedestrian phase */
-    static int last_ped = 0;
-    if (snap.pedestrian_active && !last_ped)
+    static int last_ped_ev = 0;
+    if (snap.pedestrian_active && !last_ped_ev)
         add_recent_event("Pedestrian crossing OPEN");
-    if (!snap.pedestrian_active && last_ped)
+    if (!snap.pedestrian_active && last_ped_ev)
         add_recent_event("Pedestrian crossing CLOSED");
-    last_ped = snap.pedestrian_active;
+    last_ped_ev = snap.pedestrian_active;
 }
 
 /* ---------- HUD ------------------------------------------------------ */
 static void draw_hud(void)
 {
-    /* switch to orthographic 2-D                                        */
     glDisable(GL_LIGHTING);
     glDisable(GL_DEPTH_TEST);
     glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity();
@@ -589,8 +643,8 @@ static void draw_hud(void)
     glBegin(GL_QUADS);
         glVertex2f(10,            WIN_H - 10);
         glVertex2f(360,           WIN_H - 10);
-        glVertex2f(360,           WIN_H - 200);
-        glVertex2f(10,            WIN_H - 200);
+        glVertex2f(360,           WIN_H - 230); 
+        glVertex2f(10,            WIN_H - 230);
     glEnd();
     glDisable(GL_BLEND);
 
@@ -613,16 +667,36 @@ static void draw_hud(void)
              snap.waiting_vehicles[2], snap.waiting_vehicles[3]);
     draw_text(20, WIN_H - 100, buf);
 
-    snprintf(buf, sizeof(buf), "Pedestrians pending: N=%d S=%d E=%d W=%d",
+    int total_ped_waiting = 0;
+    for (int i = 0; i < NUM_DIRECTIONS; ++i)
+        total_ped_waiting += snap.pedestrian_pending[i];
+
+    snprintf(buf, sizeof(buf), "Ped waiting: N=%d  S=%d  E=%d  W=%d  (Total=%d)",
              snap.pedestrian_pending[0], snap.pedestrian_pending[1],
-             snap.pedestrian_pending[2], snap.pedestrian_pending[3]);
+             snap.pedestrian_pending[2], snap.pedestrian_pending[3],
+             total_ped_waiting);
+    if (total_ped_waiting > 0 && !snap.pedestrian_active)
+        glColor3f(1.0f, 0.85f, 0.20f);  
+    else if (snap.pedestrian_active)
+        glColor3f(0.20f, 0.90f, 0.20f); 
+    else
+        glColor3f(0.95f, 0.95f, 0.95f);
     draw_text(20, WIN_H - 120, buf);
+    glColor3f(0.95f, 0.95f, 0.95f);
+
+    if (snap.pedestrian_active) {
+        snprintf(buf, sizeof(buf), "*** PEDESTRIAN CROSSING ACTIVE *** (%d s left)",
+                 snap.pedestrian_remaining);
+        glColor3f(0.20f, 1.0f, 0.20f);
+        draw_text(20, WIN_H - 143, buf);
+        glColor3f(0.95f, 0.95f, 0.95f);
+    }
 
     if (snap.emergency_active) {
         glColor3f(1, 0.3f, 0.3f);
         snprintf(buf, sizeof(buf), "*** EMERGENCY from %s ***",
                  DIR_NAMES[snap.emergency_direction]);
-        draw_text_big(20, WIN_H - 145, buf);
+        draw_text_big(20, WIN_H - 168, buf);
         glColor3f(0.95f, 0.95f, 0.95f);
     }
 
@@ -630,7 +704,7 @@ static void draw_hud(void)
              "Served: %d veh   %d ped   |   Emergencies: %d   Faults: %d",
              snap.total_vehicles_served, snap.total_pedestrians_served,
              snap.total_emergencies, snap.safety_violations);
-    draw_text(20, WIN_H - 170, buf);
+    draw_text(20, WIN_H - 200, buf);
 
     if (show_help) {
         /* bottom-right help panel */
@@ -652,6 +726,7 @@ static void draw_hud(void)
         draw_text(WIN_W - 310,  50, "  +  /  - : zoom");
         draw_text(WIN_W - 310,  30, "  h : toggle help     q : quit");
     }
+
     /* recent events panel — bottom left */
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -671,7 +746,7 @@ static void draw_hud(void)
                   % MAX_RECENT_EVENTS;
         glColor3f(0.90f, 0.90f, 0.90f);
         draw_text(20, 10 + (MAX_RECENT_EVENTS - 1 - i) * 18, recent_events[idx]);
-    } 
+    }
 
     glMatrixMode(GL_PROJECTION); glPopMatrix();
     glMatrixMode(GL_MODELVIEW);  glPopMatrix();
@@ -713,17 +788,13 @@ static void on_display(void)
     draw_ground();
     draw_roads();
 
-    /* traffic lights at each corner; pole facing oncoming lane.        */
-    /* North-facing light (for cars coming from South) — on SE corner   */
+    /* traffic lights */
     draw_traffic_light( INTER_HALF + 1.5f,  INTER_HALF + 1.5f,
                         180.0f, snap.light[DIR_NORTH]);
-    /* South-facing light — on NW corner                               */
     draw_traffic_light(-INTER_HALF - 1.5f, -INTER_HALF - 1.5f,
                           0.0f, snap.light[DIR_SOUTH]);
-    /* East-facing light — on SW corner                                */
     draw_traffic_light(-INTER_HALF - 1.5f,  INTER_HALF + 1.5f,
                         -90.0f, snap.light[DIR_EAST]);
-    /* West-facing light — on NE corner                                */
     draw_traffic_light( INTER_HALF + 1.5f, -INTER_HALF - 1.5f,
                          90.0f, snap.light[DIR_WEST]);
 
@@ -782,7 +853,7 @@ static void on_key(unsigned char k, int x, int y)
     case '2': inject_event(MTYPE_EVT_EMERGENCY, DIR_SOUTH); break;
     case '3': inject_event(MTYPE_EVT_EMERGENCY, DIR_EAST);  break;
     case '4': inject_event(MTYPE_EVT_EMERGENCY, DIR_WEST);  break;
-    case '+': case '=': cam_dist -= 1.5f; if (cam_dist < 8) cam_dist = 8; break;
+    case '+': case '=': cam_dist -= 1.5f; if (cam_dist < 8)  cam_dist = 8;  break;
     case '-': case '_': cam_dist += 1.5f; if (cam_dist > 60) cam_dist = 60; break;
     case 'h': case 'H': show_help = !show_help; break;
     case 'q': case 'Q': case 27:
@@ -807,7 +878,7 @@ static void on_timer(int v)
 {
     (void)v;
     glutPostRedisplay();
-    glutTimerFunc(60, on_timer, 0);   /* ~16 fps is plenty */
+    glutTimerFunc(60, on_timer, 0);
 }
 
 /* ---------- lighting ------------------------------------------------- */
