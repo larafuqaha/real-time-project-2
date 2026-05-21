@@ -1,0 +1,65 @@
+
+===== System started =====
+[21:12:45] INFO  WEST    Light process started (pid=3794)
+[21:12:45] INFO  EAST    Light process started (pid=3793)
+[21:12:45] INFO  PEDEST  Pedestrian generator started (pid=3797)
+[21:12:45] INFO  SOUTH   Light process started (pid=3792)
+[21:12:45] INFO  NORTH   Light process started (pid=3791)
+[21:12:45] INFO  VEHICLE Vehicle detector started (pid=3796)
+[21:12:45] INFO  CTRL    Controller process started (pid=3795)
+[21:12:45] INFO  CTRL    Phase -> ALL-RED-1 (duration=2s)
+[21:12:45] INFO  EMERG   Emergency generator started (pid=3798)
+[21:12:46] INFO  CTRL    Pedestrian request from SOUTH
+[21:12:46] INFO  CTRL    +1 vehicle(s) SOUTH (queue=1)
+[21:12:46] INFO  CTRL    +1 vehicle(s) WEST (queue=1)
+[21:12:47] INFO  NORTH   Light RED -> YELLOW
+[21:12:47] INFO  SOUTH   Light RED -> YELLOW
+[21:12:50] INFO  CTRL    Phase -> NS-GREEN (duration=9s)
+[21:12:50] INFO  CTRL    Pedestrian request from EAST
+[21:12:50] INFO  CTRL    +1 vehicle(s) NORTH (queue=1)
+[21:12:50] INFO  CTRL    +2 vehicle(s) WEST (queue=3)
+[21:12:50] INFO  SOUTH   Light YELLOW -> GREEN
+[21:12:50] INFO  NORTH   Light YELLOW -> GREEN
+[21:12:52] INFO  CTRL    +1 vehicle(s) EAST (queue=1)
+[21:12:52] INFO  CTRL    Pedestrian request from WEST
+[21:12:54] INFO  CTRL    +2 vehicle(s) NORTH (queue=2)
+[21:12:55] INFO  CTRL    +1 vehicle(s) WEST (queue=4)
+[21:12:56] INFO  CTRL    Pedestrian request from NORTH
+[21:12:57] INFO  CTRL    +1 vehicle(s) SOUTH (queue=1)
+[21:12:58] INFO  CTRL    +2 vehicle(s) SOUTH (queue=2)
+[21:12:59] INFO  CTRL    Pedestrian WALK closed
+[21:12:59] INFO  CTRL    Phase -> NS-YELLOW (duration=3s)
+[21:12:59] INFO  CTRL    TIMING: yellow phase started — must last exactly 3s
+[21:12:59] INFO  SOUTH   Light GREEN -> YELLOW
+[21:12:59] INFO  NORTH   Light GREEN -> YELLOW
+[21:13:01] INFO  CTRL    +2 vehicle(s) SOUTH (queue=3)
+[21:13:02] WARN  EMERG   Generated EMERGENCY from NORTH
+[21:13:02] INFO  CTRL    Phase -> ALL-RED-1 (duration=2s)
+[21:13:02] INFO  CTRL    +2 vehicle(s) EAST (queue=3)
+[21:13:02] WARN  CTRL    EMERGENCY vehicle from NORTH
+[21:13:02] WARN  CTRL    EMERGENCY priority for NORTH — clearing intersection
+[21:13:02] INFO  CTRL    Pedestrian WALK closed
+[21:13:02] INFO  SOUTH   Light YELLOW -> RED
+[21:13:02] INFO  NORTH   Light YELLOW -> RED
+[21:13:03] INFO  SOUTH   Light RED -> YELLOW
+[21:13:03] INFO  CTRL    Phase -> EMERGENCY (duration=8s)
+[21:13:03] INFO  CTRL    +2 vehicle(s) NORTH (queue=2)
+[21:13:03] INFO  CTRL    +1 vehicle(s) EAST (queue=4)
+[21:13:03] INFO  SOUTH   Light YELLOW -> GREEN
+[21:13:04] INFO  CTRL    +1 vehicle(s) WEST (queue=5)
+[21:13:05] INFO  CTRL    +2 vehicle(s) WEST (queue=7)
+[21:13:06] INFO  CTRL    +2 vehicle(s) WEST (queue=9)
+[21:13:07] INFO  CTRL    +2 vehicle(s) EAST (queue=6)
+[21:13:08] INFO  CTRL    +2 vehicle(s) NORTH (queue=4)
+[21:13:08] INFO  CTRL    +2 vehicle(s) SOUTH (queue=5)
+[21:13:08] INFO  CTRL    +2 vehicle(s) EAST (queue=8)
+[21:13:08] INFO  CTRL    +1 vehicle(s) WEST (queue=10)
+[21:13:09] INFO  CTRL    +1 vehicle(s) EAST (queue=9)
+[21:13:10] INFO  CTRL    +2 vehicle(s) NORTH (queue=6)
+[21:13:11] INFO  CTRL    +1 vehicle(s) SOUTH (queue=6)
+[21:13:12] INFO  CTRL    +1 vehicle(s) EAST (queue=10)
+[21:13:12] INFO  CTRL    +2 vehicle(s) WEST (queue=12)
+[21:13:13] INFO  CTRL    +1 vehicle(s) NORTH (queue=7)
+[21:13:14] INFO  CTRL    +1 vehicle(s) WEST (queue=13)
+===== System stopped =====
+
