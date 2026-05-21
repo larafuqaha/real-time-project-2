@@ -1,0 +1,40 @@
+# ============================================================================
+# Traffic Light Control System – configuration file
+# Birzeit ENCS4330 – Project #2
+#
+# Lines starting with '#' are comments. Format: key = value
+# All durations are in seconds unless suffixed _ms.
+# ============================================================================
+
+# ---- Vehicle phase timing --------------------------------------------------
+green_min_sec        = 8      # minimum green time before yellow can begin
+green_max_sec        = 20     # maximum green (semi-dynamic upper bound)
+yellow_sec           = 3      # yellow transition duration
+all_red_sec          = 2      # all-red safety interval between phases
+left_turn_green_sec  = 6      # base time for protected left turn phase
+
+# ---- Pedestrian timing -----------------------------------------------------
+ped_walk_sec         = 7      # solid WALK time
+ped_flash_sec        = 4      # flashing WALK (clearance) time
+ped_max_wait_sec     = 30     # max time a pedestrian request may wait
+
+# ---- Vehicle timing limits -------------------------------------------------
+veh_max_wait_sec     = 45     # max time the head vehicle may wait
+
+# ---- Emergency timing ------------------------------------------------------
+emergency_clear_sec  = 3      # all-red clearance before emergency green
+emergency_green_sec  = 10     # how long the emergency corridor stays open
+
+# ---- Random-event generator rates (mean inter-arrival in ms) ---------------
+vehicle_spawn_rate_ms     = 2500
+pedestrian_spawn_rate_ms  = 9000
+emergency_spawn_rate_ms   = 40000
+
+# ---- Random generator enable flags (0 = off, 1 = on) -----------------------
+enable_random_traffic       = 1
+enable_random_pedestrians   = 1
+enable_random_emergencies   = 1
+
+# ---- Logging --------------------------------------------------------------
+log_to_file     = 1
+log_file_path   = logs/traffic.log
